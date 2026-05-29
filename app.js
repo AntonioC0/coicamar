@@ -88,6 +88,7 @@ let sampleFilters = {
 };
 let supervisorActions = localDb.supervisorActions;
 let selectedAttentionForAction = null;
+let completedAiRecommendations = new Set(localDb.completedAiRecommendations || []);
 let pageUnitFilters = {
   termometria: 'lobato',
   aeracao: 'lobato',
@@ -515,6 +516,7 @@ function createInitialLocalDb() {
     lastAerationUpdate: formatDateTime(now),
     sampleLaunchesBySilo: buildInitialSampleLaunches(),
     supervisorActions: [],
+    completedAiRecommendations: [],
   };
 }
 
@@ -547,6 +549,7 @@ function loadLocalDb() {
       lastAerationUpdate: parsed.lastAerationUpdate || initial.lastAerationUpdate,
       sampleLaunchesBySilo: normalizeSampleStore(parsed.sampleLaunchesBySilo || initial.sampleLaunchesBySilo),
       supervisorActions: normalizeSupervisorActions(parsed.supervisorActions),
+      completedAiRecommendations: Array.isArray(parsed.completedAiRecommendations) ? parsed.completedAiRecommendations : [],
     };
   } catch (error) {
     return initial;
@@ -566,6 +569,7 @@ function saveLocalDb() {
     lastAerationUpdate,
     sampleLaunchesBySilo,
     supervisorActions,
+    completedAiRecommendations: [...completedAiRecommendations],
   }));
 }
 
@@ -1127,6 +1131,21 @@ function renderDashboardWeatherCards() {
 
 
 
+
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function getAiRecommendationKey(item) {
+  return `${item.unitName || ''}|${item.silo || ''}|${item.title || ''}|${item.origin || ''}`;
+}
+
 function getIntegratedSiloSnapshot(unitKey, silo, index = 0) {
   const unit = unitConfigs[unitKey];
   const seed = (index + 1) * 137 + unitKey.length * 19;
@@ -1297,6 +1316,7 @@ function buildAiRecommendations(attentions) {
 
   const priorityOrder = { 'Crítico': 0, 'Atenção': 1, 'Padrão': 2 };
   return recommendations
+    .filter(item => !completedAiRecommendations.has(getAiRecommendationKey(item)))
     .sort((a, b) => (priorityOrder[a.priority] ?? 9) - (priorityOrder[b.priority] ?? 9))
     .slice(0, 4);
 }
@@ -1307,19 +1327,48 @@ function renderAiRecommendations(attentions) {
 
   const recommendations = buildAiRecommendations(attentions);
 
-  container.innerHTML = recommendations.map(item => `
-    <article class="ai-recommendation ${statusClassByName(item.priority)}">
-      <div class="ai-rec-top">
-        <span class="badge ${badgeClass(item.priority)}">${item.priority}</span>
-        <small>${item.unitName} • ${item.silo}</small>
-      </div>
-      <h3>${item.title}</h3>
-      ${item.data ? `<div class="ai-data-line">${item.data}</div>` : ''}
-      <p><strong>Diagnóstico:</strong> ${item.reason}</p>
-      <p><strong>Recomendação:</strong> ${item.action}</p>
-      <em>${item.origin}</em>
-    </article>
-  `).join('');
+  if (!recommendations.length) {
+    container.innerHTML = `
+      <article class="ai-recommendation normal ai-recommendation-empty">
+        <div class="ai-rec-top">
+          <span class="badge badge-normal">Realizado</span>
+          <small>IA operacional</small>
+        </div>
+        <h3>Todas as recomendações foram realizadas</h3>
+        <p><strong>Status:</strong> Não há recomendações pendentes para os filtros atuais.</p>
+        <p><strong>Próximo passo:</strong> Continue acompanhando os lançamentos e o comportamento dos silos.</p>
+      </article>
+    `;
+    return;
+  }
+
+  container.innerHTML = recommendations.map(item => {
+    const key = getAiRecommendationKey(item);
+    return `
+      <article class="ai-recommendation ${statusClassByName(item.priority)}" data-ai-key="${escapeHtml(key)}">
+        <div class="ai-rec-top">
+          <span class="badge ${badgeClass(item.priority)}">${item.priority}</span>
+          <small>${item.unitName} • ${item.silo}</small>
+        </div>
+        <h3>${item.title}</h3>
+        ${item.data ? `<div class="ai-data-line">${item.data}</div>` : ''}
+        <p><strong>Diagnóstico:</strong> ${item.reason}</p>
+        <p><strong>Recomendação:</strong> ${item.action}</p>
+        <div class="ai-rec-footer">
+          <em>${item.origin}</em>
+          <button class="ai-done-btn" type="button" data-ai-done="${escapeHtml(key)}">Realizada</button>
+        </div>
+      </article>
+    `;
+  }).join('');
+
+  container.querySelectorAll('[data-ai-done]').forEach(button => {
+    button.addEventListener('click', () => {
+      completedAiRecommendations.add(button.dataset.aiDone);
+      saveLocalDb();
+      renderDashboard();
+    });
+  });
 }
 
 function renderDashboardAttentions(attentions) {

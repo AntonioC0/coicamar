@@ -2884,3 +2884,87 @@ h1 { font-size: 24px; }
     justify-self: stretch;
   }
 }
+
+
+/* =========================================================
+   IA OPERACIONAL - BOTÃO REALIZADA
+   ========================================================= */
+.ai-rec-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 2px;
+}
+
+.ai-done-btn {
+  min-height: 32px;
+  border: 1px solid #a9dcb4;
+  border-radius: 9px;
+  background: #fff;
+  color: var(--green);
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.ai-done-btn:hover {
+  background: var(--green);
+  color: #fff;
+}
+
+.ai-recommendation-empty {
+  grid-column: 1 / -1;
+}
+
+
+/* =========================================================
+   IA OPERACIONAL - SCROLL LATERAL DE RECOMENDAÇÕES
+   ========================================================= */
+.ai-insight-card {
+  overflow: hidden;
+}
+
+.ai-insight-grid {
+  display: flex;
+  grid-template-columns: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  gap: 12px;
+  padding: 4px 4px 14px;
+  scroll-snap-type: x proximity;
+}
+
+.ai-insight-grid::-webkit-scrollbar {
+  height: 10px;
+}
+
+.ai-insight-grid::-webkit-scrollbar-track {
+  background: #eef3f0;
+  border-radius: 999px;
+}
+
+.ai-insight-grid::-webkit-scrollbar-thumb {
+  background: #a9dcb4;
+  border-radius: 999px;
+}
+
+.ai-insight-grid::-webkit-scrollbar-thumb:hover {
+  background: var(--green);
+}
+
+.ai-recommendation {
+  flex: 0 0 min(420px, 86vw);
+  scroll-snap-align: start;
+}
+
+.ai-recommendation-empty {
+  flex-basis: 100%;
+}
+
+@media (max-width: 760px) {
+  .ai-recommendation {
+    flex-basis: 88vw;
+  }
+}
