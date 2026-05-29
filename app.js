@@ -952,6 +952,10 @@ function isDateInsideDashboardPeriod(dateTimeLabel) {
   return true;
 }
 
+function getUnitKeyByName(unitName) {
+  return Object.keys(unitConfigs).find(key => unitConfigs[key]?.name === unitName) || currentUnit;
+}
+
 function getUnitNameByKey(unitKey) {
   return unitConfigs[unitKey]?.name || unitKey;
 }
@@ -1285,6 +1289,64 @@ function buildAiRecommendations(attentions) {
     }
   });
 
+
+  // Garante alinhamento com a tabela "Atenções operacionais":
+  // cada ponto de atenção aberto deve ter pelo menos uma recomendação correspondente.
+  attentions.forEach(attention => {
+    if (recommendations.some(item =>
+      item.unitName === attention.unitName &&
+      item.silo === attention.silo &&
+      item.origin === attention.origin
+    )) {
+      return;
+    }
+
+    if (attention.origin === 'Termometria') {
+      pushRecommendation({
+        priority: attention.severity,
+        origin: attention.origin,
+        unitName: attention.unitName,
+        silo: attention.silo,
+        title: attention.severity === 'Crítico'
+          ? 'Temperatura crítica exige ação operacional'
+          : 'Aquecimento em atenção requer acompanhamento',
+        data: `${attention.attention}`,
+        reason: attention.severity === 'Crítico'
+          ? 'A leitura está em nível crítico e pode indicar foco de aquecimento na massa de grãos.'
+          : 'A leitura está em atenção e pode evoluir caso a tendência de aquecimento continue.',
+        action: attention.severity === 'Crítico'
+          ? 'Verificar o ponto indicado, avaliar a janela de aeração com base na temperatura ambiente e lançar nova leitura após a ação.'
+          : 'Acompanhar a evolução diária, comparar sensores vizinhos e programar aeração se a temperatura ambiente estiver favorável.',
+      });
+      return;
+    }
+
+    if (attention.origin === 'Mapa de Amostra') {
+      pushRecommendation({
+        priority: attention.severity,
+        origin: attention.origin,
+        unitName: attention.unitName,
+        silo: attention.silo,
+        title: attention.attention,
+        data: `Atenção identificada no mapa de amostra`,
+        reason: 'O ponto de amostra indica desvio de qualidade que pode impactar conservação, aeração e estabilidade da massa armazenada.',
+        action: 'Realizar nova conferência da amostra, comparar com o histórico do silo e decidir se o lote precisa de segregação, reclassificação ou acompanhamento intensivo.',
+      });
+      return;
+    }
+
+    pushRecommendation({
+      priority: attention.severity || 'Atenção',
+      origin: attention.origin,
+      unitName: attention.unitName,
+      silo: attention.silo,
+      title: attention.attention,
+      data: `Atenção operacional aberta`,
+      reason: 'Existe uma ocorrência aberta que precisa de avaliação operacional.',
+      action: 'Analisar a ocorrência e lançar uma ação para o responsável quando necessário.',
+    });
+  });
+
   selectedUnits.forEach(unitKey => {
     const weather = weatherByUnit[unitKey];
     if (weather?.trend === 'Chovendo') {
@@ -1317,8 +1379,7 @@ function buildAiRecommendations(attentions) {
   const priorityOrder = { 'Crítico': 0, 'Atenção': 1, 'Padrão': 2 };
   return recommendations
     .filter(item => !completedAiRecommendations.has(getAiRecommendationKey(item)))
-    .sort((a, b) => (priorityOrder[a.priority] ?? 9) - (priorityOrder[b.priority] ?? 9))
-    .slice(0, 4);
+    .sort((a, b) => (priorityOrder[a.priority] ?? 9) - (priorityOrder[b.priority] ?? 9));
 }
 
 function renderAiRecommendations(attentions) {
@@ -1345,7 +1406,7 @@ function renderAiRecommendations(attentions) {
   container.innerHTML = recommendations.map(item => {
     const key = getAiRecommendationKey(item);
     return `
-      <article class="ai-recommendation ${statusClassByName(item.priority)}" data-ai-key="${escapeHtml(key)}">
+      <article class="ai-recommendation ${statusClassByName(item.priority)}" data-ai-open="${escapeHtml(key)}" tabindex="0" role="button" aria-label="Abrir recomendação para lançar ação">
         <div class="ai-rec-top">
           <span class="badge ${badgeClass(item.priority)}">${item.priority}</span>
           <small>${item.unitName} • ${item.silo}</small>
@@ -1355,18 +1416,48 @@ function renderAiRecommendations(attentions) {
         <p><strong>Diagnóstico:</strong> ${item.reason}</p>
         <p><strong>Recomendação:</strong> ${item.action}</p>
         <div class="ai-rec-footer">
-          <em>${item.origin}</em>
+          <div class="ai-rec-meta">
+            <em>${item.origin}</em>
+            <span class="ai-open-hint">Clique no card para lançar ação</span>
+          </div>
           <button class="ai-done-btn" type="button" data-ai-done="${escapeHtml(key)}">Realizada</button>
         </div>
       </article>
     `;
   }).join('');
 
+  const map = new Map(recommendations.map(item => [getAiRecommendationKey(item), item]));
+
   container.querySelectorAll('[data-ai-done]').forEach(button => {
-    button.addEventListener('click', () => {
+    button.addEventListener('click', event => {
+      event.stopPropagation();
       completedAiRecommendations.add(button.dataset.aiDone);
       saveLocalDb();
       renderDashboard();
+    });
+  });
+
+  container.querySelectorAll('[data-ai-open]').forEach(card => {
+    const handler = () => {
+      const item = map.get(card.dataset.aiOpen);
+      if (item) openActionModal({
+        unitKey: item.unitKey || getUnitKeyByName(item.unitName),
+        unitName: item.unitName,
+        origin: item.origin,
+        silo: item.silo,
+        attention: item.title,
+        title: item.title,
+        data: item.data,
+        action: item.action,
+      });
+    };
+
+    card.addEventListener('click', handler);
+    card.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        handler();
+      }
     });
   });
 }
@@ -1553,7 +1644,6 @@ function renderDashboard() {
   document.getElementById('dashboard-actions-late').textContent = late;
 
   renderDashboardWeatherCards();
-  renderDashboardAttentions(attentions);
   renderAiRecommendations(attentions);
   renderDashboardActions();
   renderDashboardUnitsTable();
@@ -1618,22 +1708,26 @@ function changeUnit(unitKey) {
 function openActionModal(attention = null) {
   selectedAttentionForAction = attention;
   const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
-  const unitKey = attention?.unitKey || getDefaultDashboardActionUnit();
+
+  const unitKey = attention?.unitKey || getUnitKeyByName(attention?.unitName) || getDefaultDashboardActionUnit();
   const unitName = getUnitNameByKey(unitKey);
-  const origin = attention?.origin || 'Termometria';
+  const origin = attention?.origin || 'IA operacional';
   const silo = attention?.silo || unitConfigs[unitKey]?.silos?.[0]?.name || 'Silo 01';
-  const detail = attention?.attention || '';
+  const detail = attention?.attention || attention?.title || '';
+  const description = attention?.action
+    ? `${attention.title || 'Recomendação da IA'}: ${attention.action}`
+    : (detail ? `Verificar e corrigir: ${detail}` : '');
 
   document.getElementById('action-unit').value = unitKey;
   populateActionSiloOptions(unitKey);
-  document.getElementById('action-origin').value = origin;
+  document.getElementById('action-origin').value = ['Termometria', 'Aeração', 'Mapa de Amostra'].includes(origin) ? origin : 'Termometria';
   document.getElementById('action-silo').value = silo;
   document.getElementById('action-coordinator').value = ACTION_COORDINATORS[0];
-  document.getElementById('action-attention').value = detail;
+  document.getElementById('action-attention').value = detail || 'Recomendação operacional da IA';
   document.getElementById('action-due-date').value = getDateInputValue(tomorrow);
-  document.getElementById('action-description').value = detail ? `Verificar e corrigir: ${detail}` : '';
+  document.getElementById('action-description').value = description;
   document.getElementById('action-context-origin').textContent = `${unitName} - ${origin} - ${silo}`;
-  document.getElementById('action-context-detail').textContent = detail || 'Ação manual sem atenção selecionada.';
+  document.getElementById('action-context-detail').textContent = attention?.data || detail || 'Ação manual sem atenção selecionada.';
   document.getElementById('action-modal-backdrop').hidden = false;
 }
 
