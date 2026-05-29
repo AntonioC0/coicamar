@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 420" role="img" aria-labelledby="title desc">
+  <title id="title">COICamar</title>
+  <desc id="desc">Marca COICamar com silo e circuitos agrícolas.</desc>
+  <defs>
+    <linearGradient id="green" x1="90" x2="330" y1="80" y2="300" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#2f8f27"/>
+      <stop offset="0.5" stop-color="#167023"/>
+      <stop offset="1" stop-color="#064f1d"/>
+    </linearGradient>
+    <linearGradient id="steel" x1="126" x2="220" y1="150" y2="288" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.5" stop-color="#dfe4e8"/>
+      <stop offset="1" stop-color="#ffffff"/>
+    </linearGradient>
+  </defs>
+  <rect width="420" height="420" rx="42" fill="#fff"/>
+  <path d="M110 216a112 112 0 0 1 221-33" fill="none" stroke="url(#green)" stroke-width="14" stroke-linecap="round"/>
+  <circle cx="210" cy="91" r="17" fill="#fff" stroke="url(#green)" stroke-width="11"/>
+  <circle cx="105" cy="188" r="15" fill="#fff" stroke="url(#green)" stroke-width="10"/>
+  <circle cx="337" cy="176" r="14" fill="#fff" stroke="url(#green)" stroke-width="10"/>
+  <path d="M155 148h110l34 36v12H121v-12l34-36Z" fill="url(#green)"/>
+  <path d="M147 150h126m-112 5-34 31m84-35v43m43-37 33 29" fill="none" stroke="#d7f2d9" stroke-width="4" stroke-linecap="round"/>
+  <path d="M154 136h112v13H154z" fill="#126720"/>
+  <path d="M175 129h70v13h-70z" fill="#23822b"/>
+  <path d="M126 194h86v113h-86z" fill="url(#steel)" stroke="#0d5f22" stroke-width="8" stroke-linejoin="round"/>
+  <path d="M126 220h86M126 247h86M126 274h86" fill="none" stroke="#0d5f22" stroke-width="6"/>
+  <path d="M214 194h52l16 17h42m-110 22h63l20 18h47m-130 23h45l24 21h55m-124-74h34l20 17m-54 43h32l19 17h44" fill="none" stroke="url(#green)" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="329" cy="211" r="9" fill="#fff" stroke="#237d25" stroke-width="7"/>
+  <circle cx="350" cy="251" r="9" fill="#fff" stroke="#237d25" stroke-width="7"/>
+  <circle cx="343" cy="295" r="9" fill="#fff" stroke="#237d25" stroke-width="7"/>
+  <path d="M96 322c54-18 119-21 202-4-47 5-84 14-121 31-31-13-56-20-81-27Z" fill="url(#green)"/>
+  <path d="M146 347c54-24 103-32 169-22-41 10-73 25-105 45-22-10-42-17-64-23Z" fill="url(#green)"/>
+</svg>
