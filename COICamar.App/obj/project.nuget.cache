@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "g0ws20TnkQs=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\Op com Produtos\\Documents\\COICamar\\COICamar.App\\COICamar.App.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\Op com Produtos\\.nuget\\packages\\microsoft.aspnetcore.app.internal.assets\\10.0.8\\microsoft.aspnetcore.app.internal.assets.10.0.8.nupkg.sha512"
+  ],
+  "logs": []
+}

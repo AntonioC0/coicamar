@@ -1,0 +1,884 @@
+@page "/"
+@rendermode InteractiveServer
+@using COICamar.App.Models
+@using COICamar.App.Services
+@inject OperationalDataService DataService
+
+<PageTitle>COICamar - Termometria de Silos</PageTitle>
+
+@if (State is null)
+{
+    <div class="app-shell">
+        <main class="main" style="margin-left:0;width:100%;">
+            <section class="page page-active">
+                <div class="dashboard-panel">
+                    <div class="dashboard-panel-header">
+                        <h2>Carregando COICamar</h2>
+                        <span>Conectando ao banco local</span>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+}
+else
+{
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="brand-mark">
+                <img class="brand-logo" src="assets/coicamar-logo.png" alt="COICamar" />
+            </div>
+
+            <nav class="nav-list" aria-label="Menu principal">
+                <button class="@NavClass("dashboard")" type="button" @onclick='() => SetPage("dashboard")'>
+                    <span class="nav-ico" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><path d="M4 13h7V4H4v9Zm9 7h7V4h-7v16ZM4 20h7v-5H4v5Z" /></svg>
+                    </span>
+                    <span>Dashboard</span>
+                </button>
+                <button class="@NavClass("termometria")" type="button" @onclick='() => SetPage("termometria")'>
+                    <span class="nav-ico" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><path d="M9 14.5V5a3 3 0 0 1 6 0v9.5a5 5 0 1 1-6 0Zm3 4.5a2 2 0 0 0 1-3.73V5a1 1 0 0 0-2 0v10.27A2 2 0 0 0 12 19Z" /></svg>
+                    </span>
+                    <span>Termometria</span>
+                </button>
+                <button class="@NavClass("aeracao")" type="button" @onclick='() => SetPage("aeracao")'>
+                    <span class="nav-ico" aria-hidden="true">
+                        <svg viewBox="0 0 24 24"><path d="M4 13c3.3-4.7 8.7-4.7 12 0 1.2 1.7 2.4 2.3 4 2v2c-2.5.4-4.2-.7-5.7-2.8-2.5-3.5-5.9-3.5-8.4 0L4 17v-4Zm0-6c3.3-4.7 8.7-4.7 12 0 1.2 1.7 2.4 2.3 4 2v2c-2.5.4-4.2-.7-5.7-2.8-2.5-3.5-5.9-3.5-8.4 0L4 11V7Z" /></svg>
+                    </span>
+                    <span>Aeração</span>
+                </button>
+            </nav>
+
+            <div class="sidebar-art">
+                <div class="leaf-shape"></div>
+                <div class="silo-mini"></div>
+            </div>
+        </aside>
+
+        <main class="main">
+            <header class="topbar">
+                <div class="topbar-left">
+                    <button class="icon-button" type="button" aria-label="Abrir menu">☰</button>
+                    <div class="title-wrap">
+                        <span class="leaf-icon">♧</span>
+                        <h1>@CurrentTitle</h1>
+                    </div>
+                </div>
+                <div class="topbar-actions">
+                    <div class="notification-center">
+                        <button class="bell" type="button" aria-label="Abrir notificações" aria-expanded="@NotificationsOpen" @onclick="ToggleNotifications">
+                            <span class="bell-icon">🔔</span>
+                            <strong class="notification-count">@Attentions.Count</strong>
+                        </button>
+
+                        <div class="notifications-panel" hidden="@(!NotificationsOpen)">
+                            <div class="notifications-header">
+                                <h2>Notificações</h2>
+                                <button type="button" @onclick="CloseNotifications">Marcar como lidas</button>
+                            </div>
+
+                            <div class="notification-list">
+                                @if (Attentions.Count == 0)
+                                {
+                                    <div class="notification-empty">
+                                        <strong>Sem ocorrências</strong>
+                                        <small>Todos os silos estão sem ocorrências no momento.</small>
+                                    </div>
+                                }
+                                else
+                                {
+                                    @foreach (var attention in Attentions.Take(4))
+                                    {
+                                        <button class="notification-item @NotificationClass(attention)" type="button" @onclick="() => OpenAttentionTarget(attention)">
+                                            <span class="notification-icon">@NotificationIcon(attention)</span>
+                                            <span class="notification-content">
+                                                <strong>@attention.Silo - @attention.Severity</strong>
+                                                <small>@attention.Attention</small>
+                                            </span>
+                                            <em>@attention.Origin</em>
+                                        </button>
+                                    }
+                                }
+                            </div>
+
+                            <button class="view-all-notifications" type="button" @onclick='() => SetPage("dashboard")'>Ver todas</button>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-primary" type="button" disabled="@IsRefreshing" @onclick="PrimaryActionAsync">
+                        @PrimaryActionLabel <strong>@PrimaryActionIcon</strong>
+                    </button>
+                </div>
+            </header>
+
+            @if (CurrentPage == "dashboard")
+            {
+                <section id="dashboard-page" class="page page-active">
+                    <div class="filter-card" style="margin-bottom: 20px;">
+                        <div class="filter-row compact-filter-row">
+                            <label class="field-block">
+                                <span>Unidade</span>
+                                <select>
+                                    <option>Atalaia</option>
+                                </select>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-metrics">
+                        <article class="metric-card">
+                            <span class="metric-icon">▣</span>
+                            <div><strong>@Summary.SiloCount</strong><small>silos monitorados</small></div>
+                        </article>
+                        <article class="metric-card dashboard-attention-card">
+                            <span class="metric-icon">!</span>
+                            <div><strong>@Summary.AttentionCount</strong><small>atenções abertas</small></div>
+                        </article>
+                        <article class="metric-card">
+                            <span class="metric-icon">▤</span>
+                            <div><strong>@Summary.PendingActions</strong><small>ações pendentes</small></div>
+                        </article>
+                        <article class="metric-card dashboard-late-card">
+                            <span class="metric-icon">◷</span>
+                            <div><strong>@Summary.LateActions</strong><small>ações atrasadas</small></div>
+                        </article>
+                    </div>
+
+                    <section class="dashboard-weather">
+                        <div class="dashboard-weather-main">
+                            <span class="dashboard-weather-icon" aria-hidden="true">♨</span>
+                            <div>
+                                <small>Temperatura externa</small>
+                                <strong>@Summary.WeatherTemperature</strong>
+                            </div>
+                        </div>
+                        <div class="dashboard-weather-status">
+                            <small>Fonte</small>
+                            <strong>@Summary.WeatherSource</strong>
+                        </div>
+                    </section>
+
+                    <section class="dashboard-panel">
+                        <header class="dashboard-panel-header">
+                            <h2>Atenções operacionais</h2>
+                            <span>Somente atenção e crítico</span>
+                        </header>
+                        <div class="table-wrap">
+                            <table class="dashboard-table" id="dashboard-attentions-table">
+                                @if (Attentions.Count == 0)
+                                {
+                                    <tbody><tr><td class="empty-table" colspan="6">Nenhum ponto de atenção ou crítico no momento.</td></tr></tbody>
+                                }
+                                else
+                                {
+                                    <thead>
+                                        <tr>
+                                            <th>Origem</th>
+                                            <th>Silo</th>
+                                            <th>Atenção</th>
+                                            <th>Prioridade</th>
+                                            <th>Status</th>
+                                            <th>Ação</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var attention in Attentions)
+                                        {
+                                            <tr class="@OriginClass(attention.Origin)">
+                                                <td><span class="source-pill @OriginClass(attention.Origin)">@OriginIcon(attention.Origin) @attention.Origin</span></td>
+                                                <td><strong>@attention.Silo</strong></td>
+                                                <td>@attention.Attention</td>
+                                                <td><span class="badge @OperationalRules.BadgeClass(attention.Severity)">@attention.Severity</span></td>
+                                                <td><span class="open-status"><i></i>Aberta</span></td>
+                                                <td><button class="action-link" type="button" @onclick="() => OpenActionModal(attention)">Lançar ação</button></td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                }
+                            </table>
+                        </div>
+                    </section>
+
+                    <section class="dashboard-panel">
+                        <header class="dashboard-panel-header">
+                            <h2>Ações para supervisão</h2>
+                            <span>Registradas no banco local</span>
+                        </header>
+                        <div class="table-wrap">
+                            <table class="dashboard-table" id="dashboard-actions-table">
+                                @if (State.SupervisorActions.Count == 0)
+                                {
+                                    <tbody><tr><td class="empty-table" colspan="7">Nenhuma ação lançada para supervisão.</td></tr></tbody>
+                                }
+                                else
+                                {
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Origem</th>
+                                            <th>Silo</th>
+                                            <th>Descrição da ação</th>
+                                            <th>Responsável</th>
+                                            <th>Data limite</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var action in State.SupervisorActions.Take(8))
+                                        {
+                                            var status = OperationalRules.GetActionRuntimeStatus(action, Today);
+                                            <tr>
+                                                <td><strong>@action.Id</strong></td>
+                                                <td>@action.Origin</td>
+                                                <td>@action.Silo</td>
+                                                <td>@action.Description</td>
+                                                <td>@action.Responsible</td>
+                                                <td>@OperationalRules.FormatDueDate(action.DueDate)</td>
+                                                <td><span class="badge @OperationalRules.ActionBadgeClass(status)">@status</span></td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                }
+                            </table>
+                        </div>
+                    </section>
+                </section>
+            }
+
+            @if (CurrentPage == "termometria")
+            {
+                <section id="termometria-page" class="page page-active">
+                    <div class="silo-grid" id="silo-grid">
+                        @foreach (var silo in Silos)
+                        {
+                            var launch = OperationalRules.GetLatestLaunch(State, silo.Key);
+                            var matrix = launch?.Matrix ?? EmptyMatrix();
+                            var rowCount = OperationalRules.MatrixRowCount(matrix);
+                            var colCount = OperationalRules.MatrixColCount(matrix);
+                            var absentSet = OperationalRules.SensorPositionSet(launch?.AbsentSensors, rowCount, colCount);
+                            var missingSet = OperationalRules.SensorPositionSet(launch?.MissingSensors, rowCount, colCount);
+                            var baseRowCount = OperationalRules.GetBaseSensorRowCount(matrix, launch?.MissingSensors);
+                            var max = OperationalRules.Extrema(matrix, true);
+                            var status = OperationalRules.StatusFromLaunch(launch);
+
+                            <article class="silo-card @(colCount > 6 ? "many-wires" : "")" role="button" tabindex="0" aria-label="Abrir histórico do @silo.Name" @onclick="() => OpenSiloHistory(silo.Key)">
+                                <header class="silo-card-header">
+                                    <div>
+                                        <h2>@silo.Name</h2>
+                                        <p>@colCount fios de termometria</p>
+                                    </div>
+                                    <button class="kebab" type="button">⋮</button>
+                                </header>
+                                <div class="silo-visual">
+                                    <div class="silo-drawing">
+                                        <div class="silo-roof"></div>
+                                        <div class="levels">
+                                            @for (var i = 0; i < baseRowCount; i++)
+                                            {
+                                                <span>Nível @(i + 1)@if (i == 0)
+                                                    {
+                                                        <small>(Topo)</small>
+                                                    }@if (i == baseRowCount - 1)
+                                                    {
+                                                        <small>(Base)</small>
+                                                    }</span>
+                                            }
+                                        </div>
+                                        <div class="cable-labels" style="@GridColumns(colCount)">
+                                            @for (var i = 0; i < colCount; i++)
+                                            {
+                                                <span>@(i + 1)</span>
+                                            }
+                                        </div>
+                                        <div class="sensor-grid" style="@GridColumns(colCount)">
+                                            @for (var col = 0; col < colCount; col++)
+                                            {
+                                                var positions = OperationalRules.GetColumnSensorPositions(matrix, col, missingSet);
+                                                var split = OperationalRules.SplitColumnSensorPositions(positions, baseRowCount);
+                                                var bodyRows = Math.Max(baseRowCount, split.Body.Count);
+
+                                                <div class="cable-column @(split.Roof.Count > 0 ? "has-roof-sensor" : "")">
+                                                    @for (var index = 0; index < split.Roof.Count; index++)
+                                                    {
+                                                        var point = split.Roof[index];
+                                                        <span class="@SensorClass(point, absentSet, "roof-sensor")" style="top: @(-24 - index * 18)px;"><i></i>@SensorLabel(point, absentSet)</span>
+                                                    }
+                                                    @for (var index = 0; index < split.Body.Count; index++)
+                                                    {
+                                                        var point = split.Body[index];
+                                                        <span class="@SensorClass(point, absentSet)" style="top: @OperationalRules.SensorTopPosition(index, bodyRows)%;"><i></i>@SensorLabel(point, absentSet)</span>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                                <footer class="silo-card-footer">
+                                    <article>
+                                        <small>Temperatura mais alta</small>
+                                        <strong class="avg-value @OperationalRules.StatusClassByValue(max.Value)">@OperationalRules.FormatExtrema(max)</strong>
+                                    </article>
+                                    <article>
+                                        <small>Situação</small>
+                                        <strong class="badge @OperationalRules.BadgeClass(status)">@status</strong>
+                                    </article>
+                                </footer>
+                            </article>
+                        }
+                    </div>
+
+                    <footer class="footer-bar">
+                        <div><span class="footer-icon">▣</span>Última leitura da Procer: <strong>@LastTermometryUpdate</strong></div>
+                        <div><span class="footer-icon">↻</span>Última consulta à API: <strong>@OperationalRules.FormatDateTime(State.LastOperationalQueryAt)</strong></div>
+                        <div><span class="footer-icon">◷</span>Atualização automática a cada 15 minutos</div>
+                        <div class="legend">
+                            <span><i class="dot normal"></i>Padrão (até 27°C)</span>
+                            <span><i class="dot attention"></i>Atenção (27°C a 30°C)</span>
+                            <span><i class="dot critical"></i>Crítico (acima de 30°C)</span>
+                        </div>
+                    </footer>
+                </section>
+            }
+
+            @if (CurrentPage == "aeracao")
+            {
+                var aerationItems = State.AerationData;
+                var runningMotors = aerationItems.Where(item => item.Status == "Ligada").Sum(item => item.MotorCount);
+                var totalHours = aerationItems.Sum(item => item.MonthlyHours);
+                var averageTemperature = aerationItems.Count > 0 ? aerationItems.Average(item => item.Temperature) : (double?)null;
+
+                <section id="aeracao-page" class="page page-active">
+                    <div class="aeration-summary">
+                        <article class="metric-card">
+                            <span class="metric-icon">▣</span>
+                            <div><strong>@aerationItems.Count</strong><small>silos monitorados</small></div>
+                        </article>
+                        <article class="metric-card">
+                            <span class="metric-icon">✣</span>
+                            <div><strong>@runningMotors</strong><small>motores em operação</small></div>
+                        </article>
+                        <article class="metric-card">
+                            <span class="metric-icon">◷</span>
+                            <div><strong>@OperationalRules.FormatDuration(totalHours)</strong><small>horas totais no mês</small></div>
+                        </article>
+                        <article class="metric-card">
+                            <span class="metric-icon">♨</span>
+                            <div><strong>@OperationalRules.FormatTemperature(averageTemperature)</strong><small>temperatura ambiente</small></div>
+                        </article>
+                    </div>
+
+                    <div class="aeration-grid" id="aeration-grid">
+                        @if (aerationItems.Count == 0)
+                        {
+                            <div class="aeration-empty">Nenhum registro salvo para esse filtro.</div>
+                        }
+                        else
+                        {
+                            @foreach (var item in aerationItems)
+                            {
+                                var statusClass = OperationalRules.AerationStatusClass(item.Status);
+                                var tempClass = OperationalRules.StatusClassByValue(item.Temperature);
+
+                                <article class="aeration-card @statusClass">
+                                    <header class="aeration-card-header">
+                                        <span class="aeration-silo-mark" aria-hidden="true">
+                                            <svg viewBox="0 0 48 48">
+                                                <path d="M13 20h22v21H13V20Z" />
+                                                <path d="M9 20 24 9l15 11v3H9v-3Z" />
+                                                <path d="M16 27h16M16 33h16M16 39h16" />
+                                            </svg>
+                                        </span>
+                                        <h2>@item.Name</h2>
+                                        <span class="aeration-status-pill @statusClass"><i></i>@item.Status</span>
+                                    </header>
+
+                                    <dl class="aeration-readings">
+                                        <div><dt>Horas ligadas no mês</dt><dd>@OperationalRules.FormatDuration(item.MonthlyHours)</dd></div>
+                                        <div><dt>Último ligamento</dt><dd>@item.LastStart</dd></div>
+                                        <div><dt>Quantidade de motores</dt><dd>@item.MotorCount</dd></div>
+                                        <div><dt>Temperatura ambiente</dt><dd class="@tempClass">@OperationalRules.FormatTemperature(item.Temperature)</dd></div>
+                                    </dl>
+                                </article>
+                            }
+                        }
+                    </div>
+
+                    <footer class="footer-bar">
+                        <div><span class="footer-icon">▣</span>Última leitura da Procer: <strong>@(State.LastAerationUpdate ?? "--")</strong></div>
+                        <div><span class="footer-icon">↻</span>Última consulta à API: <strong>@OperationalRules.FormatDateTime(State.LastOperationalQueryAt)</strong></div>
+                        <div><span class="footer-icon">◷</span>Horas calculadas entre leituras consecutivas salvas da API</div>
+                        <div class="legend">
+                            <span><i class="dot normal"></i>Ligada</span>
+                            <span><i class="dot muted"></i>Desligada</span>
+                            <span><i class="dot critical"></i>Falha</span>
+                        </div>
+                    </footer>
+                </section>
+            }
+
+            @if (CurrentPage == "history")
+            {
+                var launches = GetSelectedLaunches();
+                var launch = launches.ElementAtOrDefault(SelectedLaunchIndex) ?? launches.FirstOrDefault();
+                var matrix = launch?.Matrix ?? EmptyMatrix();
+                var rowCount = OperationalRules.MatrixRowCount(matrix);
+                var colCount = OperationalRules.MatrixColCount(matrix);
+                var baseRowCount = OperationalRules.GetBaseSensorRowCount(matrix, launch?.MissingSensors);
+                var max = OperationalRules.Extrema(matrix, true);
+                var min = OperationalRules.Extrema(matrix, false);
+                var status = OperationalRules.StatusFromLaunch(launch);
+                var absentSet = OperationalRules.SensorPositionSet(launch?.AbsentSensors, rowCount, colCount);
+                var missingSet = OperationalRules.SensorPositionSet(launch?.MissingSensors, rowCount, colCount);
+                var columns = Enumerable.Range(0, colCount)
+                    .Select(col => OperationalRules.SplitColumnSensorPositions(OperationalRules.GetColumnSensorPositions(matrix, col, missingSet), baseRowCount))
+                    .ToList();
+                var roofRowCount = columns.Count == 0 ? 0 : columns.Max(column => column.Roof.Count);
+
+                <section id="history-page" class="page page-active">
+                    <div class="filter-card">
+                        <div class="filter-row">
+                            <label class="field-block">
+                                <span>Silo selecionado</span>
+                                <select @bind="SelectedHistorySilo" @bind:after="OnHistorySiloChanged">
+                                    @foreach (var silo in Silos)
+                                    {
+                                        <option value="@silo.Key">@silo.Name</option>
+                                    }
+                                </select>
+                            </label>
+
+                            <label class="field-block">
+                                <span>Período</span>
+                                <input type="text" value="Histórico local completo" readonly />
+                            </label>
+
+                            <label class="field-block search-field">
+                                <span>&nbsp;</span>
+                                <input type="search" placeholder="Buscar lançamento..." />
+                            </label>
+
+                            <button class="btn btn-outline" type="button">☷ Filtrar</button>
+                        </div>
+
+                        <div class="summary-row">
+                            <article class="metric-card"><span class="metric-icon">≋</span><div><strong>@colCount</strong><small>fios</small></div></article>
+                            <article class="metric-card"><span class="metric-icon">♨</span><div><strong>@baseRowCount</strong><small>sensores por fio</small></div></article>
+                            <article class="metric-card"><span class="metric-icon">!</span><div><strong>@OperationalRules.OfflineSensorCount(launch)</strong><small>sensores em off</small></div></article>
+                            <article class="metric-card"><span class="metric-icon">◴</span><div><strong>@(launch?.Date ?? "--")</strong><small>último lançamento</small></div></article>
+                        </div>
+                    </div>
+
+                    <div class="history-layout">
+                        <aside class="launch-list-card">
+                            <h2>Histórico de lançamentos</h2>
+                            <div class="launch-list">
+                                @for (var index = 0; index < launches.Count; index++)
+                                {
+                                    var item = launches[index];
+                                    var localIndex = index;
+                                    <button class="launch-item @(localIndex == SelectedLaunchIndex ? "active" : "")" type="button" @onclick="() => SelectLaunch(localIndex)">
+                                        <strong>@item.Date</strong>
+                                        <span>@(string.IsNullOrWhiteSpace(item.Trend) ? $"Responsável: {item.Responsible}" : $"Tendência: {item.Trend} - {OperationalRules.OfflineSummary(item)}")</span>
+                                    </button>
+                                }
+                            </div>
+                            <button class="see-more" type="button">Ver mais lançamentos⌄</button>
+                        </aside>
+
+                        <article class="details-card">
+                            <div class="details-header">
+                                <div>
+                                    <h2>Detalhes do lançamento</h2>
+                                    <p>Lançamento selecionado: <strong>@(launch?.Date ?? "--")</strong></p>
+                                </div>
+                                <button class="kebab" type="button">⋮</button>
+                            </div>
+
+                            <div class="table-wrap">
+                                <table class="temp-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Sensor</th>
+                                            @for (var col = 0; col < colCount; col++)
+                                            {
+                                                <th>Fio @(col + 1)</th>
+                                            }
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @for (var roof = 0; roof < roofRowCount; roof++)
+                                        {
+                                            <tr>
+                                                <th>@(roofRowCount > 1 ? $"Chapéu {roof + 1}" : "Chapéu")</th>
+                                                @foreach (var column in columns)
+                                                {
+                                                    var point = column.Roof.ElementAtOrDefault(roof);
+                                                    @SensorTableCell(point, absentSet)
+                                                }
+                                            </tr>
+                                        }
+                                        @for (var row = 0; row < baseRowCount; row++)
+                                        {
+                                            <tr>
+                                                <th>Sensor @(row + 1)</th>
+                                                @foreach (var column in columns)
+                                                {
+                                                    var point = column.Body.ElementAtOrDefault(row);
+                                                    @SensorTableCell(point, absentSet)
+                                                }
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="launch-summary">
+                                <article><span class="thermo green">!</span><small>Sensores em off</small><strong>@OperationalRules.OfflineSensorCount(launch)</strong></article>
+                                <article><span class="thermo red">♨</span><small>Maior temperatura</small><strong class="red-text">@OperationalRules.FormatExtrema(max)</strong><em>@max.Location</em></article>
+                                <article><span class="thermo blue">♨</span><small>Menor temperatura</small><strong>@OperationalRules.FormatExtrema(min)</strong><em>@min.Location</em></article>
+                                <article><span class="thermo green">△</span><small>Ponto de atenção</small><strong class="badge @OperationalRules.BadgeClass(status)">@status</strong></article>
+                                <article><span class="thermo green">♙</span><small>Responsável pelo lançamento</small><strong>@(launch?.Responsible ?? "--")</strong></article>
+                            </div>
+                        </article>
+                    </div>
+
+                    <footer class="footer-bar">
+                        <div><span class="footer-icon">▣</span>Última atualização: <strong>@(launch?.Date ?? "--")</strong></div>
+                        <div><span class="footer-icon">↻</span>Atualização automática a cada 15 minutos</div>
+                        <div class="legend">
+                            <span><i class="dot normal"></i>Padrão (até 27°C)</span>
+                            <span><i class="dot attention"></i>Atenção (27°C a 30°C)</span>
+                            <span><i class="dot critical"></i>Crítico (acima de 30°C)</span>
+                        </div>
+                    </footer>
+                </section>
+            }
+        </main>
+    </div>
+
+    @if (ActionModalOpen)
+    {
+        <div class="modal-backdrop">
+            <div class="modal action-modal" role="dialog" aria-modal="true" aria-labelledby="action-modal-title">
+                <button class="modal-close" type="button" aria-label="Fechar" @onclick="CloseActionModal">×</button>
+                <div class="modal-title-row">
+                    <span class="modal-icon">▤</span>
+                    <div>
+                        <h2 id="action-modal-title">Nova ação para supervisor</h2>
+                        <p>Registre a ação vinculada ao ponto de atenção operacional.</p>
+                    </div>
+                </div>
+
+                <div class="action-context">
+                    <strong>@(SelectedAttention?.Origin ?? "Origem selecionada")</strong>
+                    <span>@(SelectedAttention?.Attention ?? "Selecione uma atenção da Dashboard ou preencha manualmente.")</span>
+                </div>
+
+                <div class="action-form-grid">
+                    <label class="modal-field">
+                        <span>Origem</span>
+                        <select @bind="ActionOrigin">
+                            <option>Termometria</option>
+                            <option>Aeração</option>
+                            <option>Mapa de Amostra</option>
+                        </select>
+                    </label>
+
+                    <label class="modal-field">
+                        <span>Silo</span>
+                        <select @bind="ActionSiloKey">
+                            @foreach (var silo in Silos)
+                            {
+                                <option value="@silo.Key">@silo.Name</option>
+                            }
+                        </select>
+                    </label>
+                </div>
+
+                <label class="modal-field">
+                    <span>Resumo da atenção</span>
+                    <input type="text" @bind="ActionAttention" placeholder="Ex.: Temperatura acima do limite" />
+                </label>
+
+                <label class="modal-field">
+                    <span>Data limite</span>
+                    <input type="date" value="@ActionDueDate" @onchange="OnActionDueDateChanged" />
+                </label>
+
+                <label class="modal-field">
+                    <span>Descrição</span>
+                    <textarea rows="4" @bind="ActionDescription" placeholder="Descreva a ação que deve ser executada..."></textarea>
+                </label>
+
+                <div class="modal-actions">
+                    <button class="btn btn-outline" type="button" @onclick="CloseActionModal">Cancelar</button>
+                    <button class="btn btn-primary" type="button" @onclick="CreateActionAsync">Criar ação</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(ToastMessage))
+    {
+        <div class="operational-refresh-toast is-visible" data-type="@ToastType">@ToastMessage</div>
+    }
+}
+
+@code {
+    private OperationalState? State;
+    private List<SiloConfig> Silos = [];
+    private List<OperationalAttention> Attentions = [];
+    private DashboardSummary Summary = new();
+    private string CurrentPage = "dashboard";
+    private bool NotificationsOpen;
+    private bool IsRefreshing;
+    private bool ActionModalOpen;
+    private OperationalAttention? SelectedAttention;
+    private string SelectedHistorySilo = "atalaia::Silo 01";
+    private int SelectedLaunchIndex;
+    private string ActionOrigin = "Termometria";
+    private string ActionSiloKey = "atalaia::Silo 01";
+    private string ActionAttention = "";
+    private string ActionDueDate = DateOnly.FromDateTime(DateTime.Now).ToString("yyyy-MM-dd");
+    private string ActionDescription = "";
+    private string? ToastMessage;
+    private string ToastType = "info";
+
+    private DateOnly Today => DateOnly.FromDateTime(DateTime.Now);
+
+    private string CurrentTitle => CurrentPage switch
+    {
+        "termometria" => "Termometria de Silos",
+        "aeracao" => "Aeração de Silos",
+        "history" => "Histórico de Lançamentos",
+        _ => "Dashboard Operacional"
+    };
+
+    private string PrimaryActionLabel => IsRefreshing
+        ? "Consultando API"
+        : CurrentPage is "termometria" or "aeracao"
+            ? "Atualizar"
+            : "Nova ação";
+
+    private string PrimaryActionIcon => CurrentPage is "termometria" or "aeracao" ? "↻" : "＋";
+
+    private string LastTermometryUpdate
+    {
+        get
+        {
+            var launch = Silos
+                .Select(silo => OperationalRules.GetLatestLaunch(State!, silo.Key))
+                .Where(launch => launch is not null)
+                .Cast<ThermometryLaunch>()
+                .OrderByDescending(OperationalRules.LaunchDateKey)
+                .FirstOrDefault();
+            return launch?.Date ?? "--";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        State = await DataService.LoadAsync();
+        Rebuild();
+    }
+
+    private void Rebuild()
+    {
+        if (State is null)
+        {
+            return;
+        }
+
+        Silos = OperationalRules.GetSilos(State).ToList();
+        Attentions = OperationalRules.BuildOperationalAttentions(State);
+        Summary = OperationalRules.BuildDashboardSummary(State, Attentions);
+        SelectedHistorySilo = Silos.Any(silo => silo.Key == SelectedHistorySilo) ? SelectedHistorySilo : Silos.FirstOrDefault()?.Key ?? "atalaia::Silo 01";
+        ActionSiloKey = Silos.Any(silo => silo.Key == ActionSiloKey) ? ActionSiloKey : Silos.FirstOrDefault()?.Key ?? "atalaia::Silo 01";
+    }
+
+    private void SetPage(string page)
+    {
+        CurrentPage = page;
+        NotificationsOpen = false;
+    }
+
+    private string NavClass(string page) => $"nav-item {(CurrentPage == page ? "active" : "")}";
+
+    private void ToggleNotifications() => NotificationsOpen = !NotificationsOpen;
+
+    private void CloseNotifications() => NotificationsOpen = false;
+
+    private async Task PrimaryActionAsync()
+    {
+        if (CurrentPage is "termometria" or "aeracao")
+        {
+            await RefreshAsync();
+            return;
+        }
+
+        OpenActionModal(null);
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (IsRefreshing)
+        {
+            return;
+        }
+
+        IsRefreshing = true;
+        ToastMessage = "Consultando a API da unidade Atalaia...";
+        ToastType = "info";
+
+        var result = await DataService.RefreshOperationalAsync(force: true);
+        await ReloadAsync();
+
+        ToastMessage = result.Success
+            ? result.NewReadingCount > 0
+                ? $"Atualização concluída: {result.NewReadingCount} nova(s) leitura(s) salva(s) no histórico."
+                : "Consulta concluída. Os dados exibidos são os mais recentes disponíveis."
+            : $"Não consegui consultar a API. Últimos dados locais continuam disponíveis. {result.Message}";
+        ToastType = result.Success ? "success" : "error";
+        IsRefreshing = false;
+        _ = HideToastLaterAsync();
+    }
+
+    private async Task HideToastLaterAsync()
+    {
+        await Task.Delay(6500);
+        ToastMessage = null;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void OpenAttentionTarget(OperationalAttention attention)
+    {
+        NotificationsOpen = false;
+        if (attention.Origin == "Termometria")
+        {
+            OpenSiloHistory(attention.SiloKey);
+            return;
+        }
+
+        CurrentPage = "dashboard";
+    }
+
+    private void OpenSiloHistory(string siloKey)
+    {
+        SelectedHistorySilo = siloKey;
+        SelectedLaunchIndex = 0;
+        CurrentPage = "history";
+    }
+
+    private void OnHistorySiloChanged()
+    {
+        SelectedLaunchIndex = 0;
+    }
+
+    private void SelectLaunch(int index)
+    {
+        SelectedLaunchIndex = index;
+    }
+
+    private List<ThermometryLaunch> GetSelectedLaunches()
+    {
+        return State?.LaunchesBySilo.TryGetValue(SelectedHistorySilo, out var launches) == true
+            ? launches.OrderByDescending(OperationalRules.LaunchDateKey).ToList()
+            : [];
+    }
+
+    private void OpenActionModal(OperationalAttention? attention)
+    {
+        SelectedAttention = attention;
+        ActionOrigin = attention?.Origin ?? "Termometria";
+        ActionSiloKey = attention?.SiloKey ?? Silos.FirstOrDefault()?.Key ?? "atalaia::Silo 01";
+        ActionAttention = attention?.Attention ?? "";
+        ActionDescription = attention is null ? "" : $"Verificar e corrigir: {attention.Attention}";
+        ActionDueDate = DateOnly.FromDateTime(DateTime.Now).ToString("yyyy-MM-dd");
+        ActionModalOpen = true;
+    }
+
+    private void CloseActionModal()
+    {
+        ActionModalOpen = false;
+        SelectedAttention = null;
+    }
+
+    private void OnActionDueDateChanged(ChangeEventArgs args)
+    {
+        ActionDueDate = Convert.ToString(args.Value) ?? DateOnly.FromDateTime(DateTime.Now).ToString("yyyy-MM-dd");
+    }
+
+    private async Task CreateActionAsync()
+    {
+        await DataService.CreateSupervisorActionAsync(SelectedAttention, ActionOrigin, ActionSiloKey, ActionAttention, ActionDueDate, ActionDescription);
+        await ReloadAsync();
+        CloseActionModal();
+        ToastMessage = "Ação criada e salva no banco local.";
+        ToastType = "success";
+        _ = HideToastLaterAsync();
+    }
+
+    private static string GridColumns(int count) => $"grid-template-columns: repeat({count}, minmax(0, 1fr));";
+
+    private static List<List<double?>> EmptyMatrix() =>
+        Enumerable.Range(0, OperationalRules.DefaultSensorCount)
+            .Select(_ => Enumerable.Range(0, OperationalRules.DefaultWireCount).Select(_ => (double?)null).ToList())
+            .ToList();
+
+    private static string SensorClass(SensorPoint point, IReadOnlySet<string> absentSet, string? extra = null)
+    {
+        var sensorClass = absentSet.Contains($"{point.Row}:{point.Col}") ? "missing" : OperationalRules.StatusClassByValue(point.Value);
+        return string.Join(' ', new[] { "sensor", sensorClass, extra }.Where(value => !string.IsNullOrWhiteSpace(value)));
+    }
+
+    private static string SensorLabel(SensorPoint point, IReadOnlySet<string> absentSet)
+    {
+        return absentSet.Contains($"{point.Row}:{point.Col}") || !point.Value.HasValue
+            ? "--"
+            : OperationalRules.FormatTemperature(point.Value);
+    }
+
+    private static RenderFragment SensorTableCell(SensorPoint? point, IReadOnlySet<string> absentSet) => builder =>
+    {
+        if (point is null)
+        {
+            builder.OpenElement(0, "td");
+            builder.AddAttribute(1, "class", "sensor-cell-empty");
+            builder.CloseElement();
+            return;
+        }
+
+        builder.OpenElement(0, "td");
+        builder.OpenElement(1, "span");
+        builder.AddAttribute(2, "class", absentSet.Contains($"{point.Row}:{point.Col}") ? "missing" : OperationalRules.StatusClassByValue(point.Value));
+        builder.AddContent(3, SensorLabel(point, absentSet));
+        builder.CloseElement();
+        builder.CloseElement();
+    };
+
+    private static string OriginClass(string origin) => origin switch
+    {
+        "Termometria" => "origin-termometria",
+        "Aeração" => "origin-aeracao",
+        _ => "origin-amostra"
+    };
+
+    private static string OriginIcon(string origin) => origin switch
+    {
+        "Termometria" => "♨",
+        "Aeração" => "✣",
+        _ => "•"
+    };
+
+    private static string NotificationClass(OperationalAttention attention) =>
+        attention.Severity == "Crítico" ? "notification-critical" : "notification-attention";
+
+    private static string NotificationIcon(OperationalAttention attention) =>
+        attention.Severity == "Crítico" ? "!" : "△";
+}
